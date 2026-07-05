@@ -17,7 +17,7 @@
   - Events
   - Goals
 - Main page (Activities)
-  - Layout: 3 sections - 1st is the activity list to select to log ; 2nd, show the logged activities by date, prioritize today ; 3rd, 2 footer buttons to switch view options
+  - Layout: 3 sections - 1st is the activity list to select to log (sectionA) ; 2nd, show the logged activities by date, prioritize today (sectionB) ; 3rd, 2 footer buttons to switch view options
   - Tab activities is the default one. Show list of activities as buttons:
     - Walking, Elliptical
     - Running

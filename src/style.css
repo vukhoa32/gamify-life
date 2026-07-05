@@ -89,7 +89,8 @@ body {
 }
 
 .activity-picker {
-  flex-shrink: 0;
+  flex: 0 0 40%;
+  min-height: 0;
 }
 
 .activity-grid {

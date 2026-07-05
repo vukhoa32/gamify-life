@@ -91,12 +91,17 @@ body {
 .activity-picker {
   flex: 0 0 40%;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .activity-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 0.5rem;
+  overflow-y: auto;
+  padding-right: 0.15rem;
 }
 
 .activity-item {

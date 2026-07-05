@@ -85,7 +85,17 @@ async function saveLogs(logs) {
   }
 }
 
-function loadEvents() {
+async function loadEvents() {
+  if (window.__firestoreEnabled && typeof window.loadEventsRemote === 'function') {
+    try {
+      const remote = await window.loadEventsRemote();
+      const safeRemote = Array.isArray(remote) ? remote : [];
+      localStorage.setItem(EVENTS_KEY, JSON.stringify(safeRemote));
+      return safeRemote;
+    } catch {
+      // fallback to local
+    }
+  }
   try {
     const stored = JSON.parse(localStorage.getItem(EVENTS_KEY) || '[]');
     return Array.isArray(stored) ? stored : [];
@@ -94,8 +104,15 @@ function loadEvents() {
   }
 }
 
-function saveEvents(events) {
+async function saveEvents(events) {
   localStorage.setItem(EVENTS_KEY, JSON.stringify(events));
+  if (window.__firestoreEnabled && typeof window.saveEventsRemote === 'function') {
+    try {
+      await window.saveEventsRemote(events);
+    } catch (e) {
+      console.error('Failed to save events to Firestore', e);
+    }
+  }
 }
 
 function todayKey() {
@@ -394,8 +411,8 @@ function initDatePickerView() {
   });
 }
 
-function renderEvents() {
-  const events = loadEvents().sort((a, b) => {
+async function renderEvents() {
+  const events = (await loadEvents()).sort((a, b) => {
     if (eventSortByAdded) {
       return new Date(b.createdAt || b.eventDate) - new Date(a.createdAt || a.eventDate);
     }
@@ -429,12 +446,12 @@ function closeEventDialog() {
   els.eventDialog.close();
 }
 
-function saveEventFromForm() {
+async function saveEventFromForm() {
   const title = els.eventTitle.value.trim();
   const eventDate = els.eventDate.value;
   const description = els.eventDescription.value.trim();
   if (!title || !eventDate) return;
-  const events = loadEvents();
+  const events = await loadEvents();
   if (editingEventId) {
     const idx = events.findIndex((event) => event.id === editingEventId);
     if (idx >= 0) {
@@ -450,36 +467,38 @@ function saveEventFromForm() {
       updatedAt: new Date().toISOString(),
     });
   }
-  saveEvents(events);
-  renderEvents();
+  await saveEvents(events);
+  await renderEvents();
   closeEventDialog();
   showToast(editingEventId ? 'Event updated' : 'Event added');
 }
 
-function initEvents() {
+async function initEvents() {
   els.eventAddBtn.addEventListener('click', () => openEventDialog());
-  els.eventSortBtn.addEventListener('click', () => {
+  els.eventSortBtn.addEventListener('click', async () => {
     eventSortByAdded = !eventSortByAdded;
     els.eventSortBtn.classList.toggle('active', eventSortByAdded);
     els.eventSortBtn.textContent = eventSortByAdded ? 'Sort by added date ✓' : 'Sort by event date';
-    renderEvents();
+    await renderEvents();
   });
-  els.eventList.addEventListener('click', (e) => {
+  els.eventList.addEventListener('click', async (e) => {
     const item = e.target.closest('.event-item');
     if (!item) return;
-    const event = loadEvents().find((entry) => entry.id === item.dataset.eventId);
+    const events = await loadEvents();
+    const event = events.find((entry) => entry.id === item.dataset.eventId);
     if (event) openEventDialog(event);
   });
   els.eventDialogCancel.addEventListener('click', closeEventDialog);
   els.eventForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    saveEventFromForm();
+    void saveEventFromForm();
   });
-  renderEvents();
+  await renderEvents();
 }
 
-window.addEventListener('firestore-logs-updated', async () => {
+window.addEventListener('firestore-state-updated', async () => {
   await renderLogs();
+  await renderEvents();
 });
 
 els.dialogCancel.addEventListener('click', closeDialog);
@@ -519,7 +538,7 @@ async function startApp() {
   initDatePickerView();
   initTabs();
   initViewButtons();
-  initEvents();
+  await initEvents();
 }
 
 startApp();

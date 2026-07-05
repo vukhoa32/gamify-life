@@ -32,9 +32,18 @@
         }
       }
 
+      const readRemoteState = async () => {
+        const snap = await getDoc(docRef);
+        const data = snap.exists() ? snap.data() : {};
+        return {
+          logs: Array.isArray(data.logs) ? data.logs : (Array.isArray(data.items) ? data.items : []),
+          events: Array.isArray(data.events) ? data.events : [],
+        };
+      };
+
       try {
-        const probe = await getDoc(docRef);
-        firestoreEnabled = Boolean(probe);
+        const state = await readRemoteState();
+        firestoreEnabled = Array.isArray(state.logs) || Array.isArray(state.events);
       } catch (err) {
         console.warn('Firestore backend not reachable; using localStorage only.', err);
         firestoreEnabled = false;
@@ -46,27 +55,23 @@
         return;
       }
 
-      const syncRemoteLogs = (items) => {
-        const safeItems = Array.isArray(items) ? items : [];
-        localStorage.setItem('gamify-life-logs', JSON.stringify(safeItems));
-        window.dispatchEvent(new CustomEvent('firestore-logs-updated', { detail: safeItems }));
+      const syncRemoteState = (state) => {
+        const safeLogs = Array.isArray(state.logs) ? state.logs : [];
+        const safeEvents = Array.isArray(state.events) ? state.events : [];
+        localStorage.setItem('gamify-life-logs', JSON.stringify(safeLogs));
+        localStorage.setItem('gamify-life-events', JSON.stringify(safeEvents));
+        window.dispatchEvent(new CustomEvent('firestore-state-updated', {
+          detail: { logs: safeLogs, events: safeEvents },
+        }));
       };
 
-      window.loadLogsRemote = async () => {
-        try {
-          const snap = await getDoc(docRef);
-          if (!snap.exists()) return [];
-          const data = snap.data();
-          return Array.isArray(data.items) ? data.items : [];
-        } catch (e) {
-          console.warn('loadLogsRemote error; falling back to localStorage.', e);
-          return [];
-        }
-      };
+      window.loadLogsRemote = async () => (await readRemoteState()).logs;
+      window.loadEventsRemote = async () => (await readRemoteState()).events;
 
       window.saveLogsRemote = async (logs) => {
         try {
-          await setDoc(docRef, { items: logs });
+          const current = await readRemoteState();
+          await setDoc(docRef, { items: logs, logs, events: current.events }, { merge: true });
           return true;
         } catch (e) {
           console.warn('saveLogsRemote error; falling back to localStorage.', e);
@@ -74,9 +79,23 @@
         }
       };
 
+      window.saveEventsRemote = async (events) => {
+        try {
+          const current = await readRemoteState();
+          await setDoc(docRef, { events, logs: current.logs, items: current.logs }, { merge: true });
+          return true;
+        } catch (e) {
+          console.warn('saveEventsRemote error; falling back to localStorage.', e);
+          return false;
+        }
+      };
+
       onSnapshot(docRef, (snap) => {
-        const items = snap.exists() ? (Array.isArray(snap.data().items) ? snap.data().items : []) : [];
-        syncRemoteLogs(items);
+        const data = snap.exists() ? snap.data() : {};
+        syncRemoteState({
+          logs: Array.isArray(data.logs) ? data.logs : (Array.isArray(data.items) ? data.items : []),
+          events: Array.isArray(data.events) ? data.events : [],
+        });
       }, (err) => {
         console.warn('Firestore listener unavailable; continuing with localStorage.', err);
         window.__firestoreEnabled = false;

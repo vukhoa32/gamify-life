@@ -41,7 +41,17 @@ let deleteConfirmTimer = null;
 let toastTimer = null;
 let activeView = null;
 
-function loadLogs() {
+async function loadLogs() {
+  if (window.__firestoreEnabled && typeof window.loadLogsRemote === 'function') {
+    try {
+      const remote = await window.loadLogsRemote();
+      // keep a local cache for performance
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(remote));
+      return remote;
+    } catch {
+      // fallback to local
+    }
+  }
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
   } catch {
@@ -49,8 +59,15 @@ function loadLogs() {
   }
 }
 
-function saveLogs(logs) {
+async function saveLogs(logs) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(logs));
+  if (window.__firestoreEnabled && typeof window.saveLogsRemote === 'function') {
+    try {
+      await window.saveLogsRemote(logs);
+    } catch (e) {
+      console.error('Failed to save logs to Firestore', e);
+    }
+  }
 }
 
 function todayKey() {
@@ -131,26 +148,27 @@ function closeDialog() {
   els.dialog.close();
 }
 
-function addLog(entry) {
-  const logs = loadLogs();
+async function addLog(entry) {
+  const logs = await loadLogs();
   logs.unshift(entry);
-  saveLogs(logs);
+  await saveLogs(logs);
   renderLogs();
   showToast(`+10 XP · ${entry.activityName}`);
 }
 
-function updateLog(id, updates) {
-  const logs = loadLogs();
+async function updateLog(id, updates) {
+  const logs = await loadLogs();
   const idx = logs.findIndex((l) => l.id === id);
   if (idx === -1) return;
   logs[idx] = { ...logs[idx], ...updates };
-  saveLogs(logs);
+  await saveLogs(logs);
   renderLogs();
   showToast('Updated');
 }
 
-function deleteLog(id) {
-  saveLogs(loadLogs().filter((l) => l.id !== id));
+async function deleteLog(id) {
+  const logs = (await loadLogs()).filter((l) => l.id !== id);
+  await saveLogs(logs);
   renderLogs();
   showToast('Deleted');
 }
@@ -318,7 +336,7 @@ function initLogList() {
 
 els.dialogCancel.addEventListener('click', closeDialog);
 
-els.logForm.addEventListener('submit', (e) => {
+els.logForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!pendingActivity) return;
 
@@ -328,9 +346,9 @@ els.logForm.addEventListener('submit', (e) => {
   };
 
   if (editingLogId) {
-    updateLog(editingLogId, fields);
+    await updateLog(editingLogId, fields);
   } else {
-    addLog({
+    await addLog({
       id: crypto.randomUUID(),
       activityId: pendingActivity.id,
       activityName: pendingActivity.name,
@@ -344,8 +362,12 @@ els.logForm.addEventListener('submit', (e) => {
   closeDialog();
 });
 
-renderActivityButtons();
-renderLogs();
-initLogList();
-initTabs();
-initViewButtons();
+async function startApp() {
+  renderActivityButtons();
+  renderLogs();
+  initLogList();
+  initTabs();
+  initViewButtons();
+}
+
+startApp();

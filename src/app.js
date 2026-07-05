@@ -175,19 +175,28 @@ async function deleteLog(id) {
   showToast('Deleted');
 }
 
+function setDeleteConfirmState(id, isConfirming) {
+  document.querySelectorAll('.log-delete-btn').forEach((btn) => {
+    const shouldConfirm = btn.dataset.logId === id && isConfirming;
+    btn.classList.toggle('confirm', shouldConfirm);
+    btn.textContent = shouldConfirm ? '✓' : '✕';
+  });
+}
+
 async function handleDeleteClick(id) {
   if (deleteConfirmId === id) {
     deleteConfirmId = null;
     clearTimeout(deleteConfirmTimer);
+    setDeleteConfirmState(null, false);
     await deleteLog(id);
     return;
   }
   deleteConfirmId = id;
   clearTimeout(deleteConfirmTimer);
-  await renderLogs();
+  setDeleteConfirmState(id, true);
   deleteConfirmTimer = setTimeout(() => {
     deleteConfirmId = null;
-    renderLogs();
+    setDeleteConfirmState(null, false);
   }, 3000);
 }
 

@@ -79,6 +79,10 @@ body {
   gap: 0.75rem;
 }
 
+#screen-events {
+  padding: 0.75rem;
+}
+
 .section-label {
   margin: 0 0 0.5rem;
   font-size: 0.75rem;
@@ -268,6 +272,72 @@ body {
   box-shadow: 0 0 8px var(--accent-glow);
 }
 
+.date-button {
+  width: 100%;
+  margin-bottom: 0.35rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.event-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+  overflow: hidden;
+}
+
+.event-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.event-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.event-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: inherit;
+  text-align: left;
+  padding: 0.75rem;
+  cursor: pointer;
+}
+
+.event-item-title {
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+}
+
+.event-item-meta {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.event-item-desc {
+  margin-top: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
 .empty-state {
   color: var(--text-muted);
   font-size: 0.85rem;
@@ -337,7 +407,8 @@ body {
 }
 
 /* dialog */
-#log-dialog {
+#log-dialog,
+#event-dialog {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 0;
@@ -347,15 +418,18 @@ body {
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
 }
 
-#log-dialog::backdrop {
+#log-dialog::backdrop,
+#event-dialog::backdrop {
   background: rgba(0, 0, 0, 0.65);
 }
 
-#log-form {
+#log-form,
+#event-form {
   padding: 1rem;
 }
 
-#log-form h3 {
+#log-form h3,
+#event-form h3 {
   margin: 0 0 1rem;
   font-size: 1.05rem;
 }
@@ -374,6 +448,7 @@ body {
   align-items: center;
 }
 
+.field input,
 .field textarea {
   resize: none;
   border: 1px solid var(--border);

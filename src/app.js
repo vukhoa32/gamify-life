@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'gamify-life-logs';
+const EVENTS_KEY = 'gamify-life-events';
 
 const ACTIVITIES = [
   { id: 'walking-elliptical', name: 'Walking, Elliptical', icon: '🚶' },
@@ -32,6 +33,16 @@ const els = {
   logForm: document.getElementById('log-form'),
   toast: document.getElementById('toast'),
   viewButtons: document.querySelectorAll('.view-btn'),
+  eventList: document.getElementById('event-list'),
+  eventAddBtn: document.getElementById('event-add-btn'),
+  eventSortBtn: document.getElementById('event-sort-btn'),
+  eventDialog: document.getElementById('event-dialog'),
+  eventDialogTitle: document.getElementById('event-dialog-title'),
+  eventTitle: document.getElementById('event-title'),
+  eventDate: document.getElementById('event-date'),
+  eventDescription: document.getElementById('event-description'),
+  eventForm: document.getElementById('event-form'),
+  eventDialogCancel: document.getElementById('event-dialog-cancel'),
 };
 
 let pendingActivity = null;
@@ -40,6 +51,9 @@ let deleteConfirmId = null;
 let deleteConfirmTimer = null;
 let toastTimer = null;
 let activeView = null;
+let selectedDate = null;
+let editingEventId = null;
+let eventSortByAdded = false;
 
 async function loadLogs() {
   if (window.__firestoreEnabled && typeof window.loadLogsRemote === 'function') {
@@ -71,6 +85,19 @@ async function saveLogs(logs) {
   }
 }
 
+function loadEvents() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(EVENTS_KEY) || '[]');
+    return Array.isArray(stored) ? stored : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveEvents(events) {
+  localStorage.setItem(EVENTS_KEY, JSON.stringify(events));
+}
+
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -83,6 +110,12 @@ function formatDateLabel(dateKey) {
   if (dateKey === todayKey()) return 'Today';
   const d = new Date(dateKey + 'T12:00:00');
   return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function formatShortDate(dateKey) {
+  if (!dateKey) return '';
+  const d = new Date(dateKey + 'T12:00:00');
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
 function showToast(msg) {
@@ -126,6 +159,8 @@ function quickAddActivity(activityId) {
     description: '',
     timestamp: new Date().toISOString(),
     date: todayKey(),
+    activityDate: selectedDate || todayKey(),
+    updatedAt: new Date().toISOString(),
   });
 }
 
@@ -162,7 +197,7 @@ async function updateLog(id, updates) {
   const logs = await loadLogs();
   const idx = logs.findIndex((l) => l.id === id);
   if (idx === -1) return;
-  logs[idx] = { ...logs[idx], ...updates };
+  logs[idx] = { ...logs[idx], ...updates, updatedAt: new Date().toISOString() };
   await saveLogs(logs);
   await renderLogs();
   showToast('Updated');
@@ -200,26 +235,26 @@ async function handleDeleteClick(id) {
   }, 3000);
 }
 
-function renderLogList(logs) {
+function getVisibleLogs(logs) {
   const safeLogs = Array.isArray(logs) ? logs : [];
-  const sorted = [...safeLogs].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-  const today = todayKey();
-  const todayLogs = sorted.filter((l) => l.date === today);
-  const older = sorted.filter((l) => l.date !== today);
-
-  const sections = [];
-
-  if (todayLogs.length) {
-    sections.push({ label: 'Today', items: todayLogs });
+  if (!selectedDate) {
+    return safeLogs;
   }
+  return safeLogs.filter((log) => (log.activityDate || log.date || todayKey()) === selectedDate);
+}
 
-  const olderByDate = {};
-  older.forEach((log) => {
-    (olderByDate[log.date] ||= []).push(log);
+function renderLogList(logs) {
+  const visibleLogs = getVisibleLogs(logs);
+  const sorted = [...visibleLogs].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  const groups = {};
+
+  sorted.forEach((log) => {
+    const key = log.date || todayKey();
+    (groups[key] ||= []).push(log);
   });
-  Object.keys(olderByDate)
-    .sort((a, b) => b.localeCompare(a))
-    .forEach((date) => sections.push({ label: formatDateLabel(date), items: olderByDate[date] }));
+
+  const dateKeys = Object.keys(groups).sort((a, b) => b.localeCompare(a)).slice(0, 7);
+  const sections = dateKeys.map((date) => ({ label: formatDateLabel(date), items: groups[date] }));
 
   if (!sections.length) {
     els.logList.innerHTML = '<p class="empty-state">No activities logged yet. Tap one above!</p>';
@@ -242,6 +277,9 @@ function renderLogEntry(log) {
   const desc = log.description
     ? `<p class="log-entry-desc">${escapeHtml(log.description)}</p>`
     : '';
+  const meta = log.activityDate && log.activityDate !== log.date
+    ? `<div class="log-entry-meta">${formatTime(log.timestamp)} · ${formatDateLabel(log.activityDate)}</div>`
+    : `<div class="log-entry-meta">${formatTime(log.timestamp)}</div>`;
   const deleteConfirm = deleteConfirmId === log.id ? ' confirm' : '';
   return `
     <article class="log-entry${log.highIntensity ? ' high-intensity' : ''}" data-log-id="${log.id}">
@@ -251,7 +289,7 @@ function renderLogEntry(log) {
           <span>${escapeHtml(log.activityName)}</span>
           ${hi}
         </div>
-        <div class="log-entry-meta">${formatTime(log.timestamp)}</div>
+        ${meta}
         ${desc}
       </button>
       <button type="button" class="log-delete-btn${deleteConfirm}" data-log-id="${log.id}" aria-label="Delete">${deleteConfirm ? '✓' : '✕'}</button>
@@ -259,30 +297,26 @@ function renderLogEntry(log) {
 }
 
 function renderDateIcons(logs) {
-  if (!logs.length) {
+  const visibleLogs = getVisibleLogs(logs);
+  const dates = [...new Set(visibleLogs.map((log) => (log.activityDate || log.date || todayKey())).filter(Boolean))].sort((a, b) => b.localeCompare(a));
+  const recentDates = dates.slice(0, 50);
+
+  if (!recentDates.length) {
     els.dateIconsView.innerHTML = '<p class="empty-state">No logs yet</p>';
     return;
   }
 
-  const byDate = {};
-  logs.forEach((log) => {
-    (byDate[log.date] ||= []).push(log);
-  });
-
-  els.dateIconsView.innerHTML = Object.keys(byDate)
-    .sort((a, b) => b.localeCompare(a))
+  els.dateIconsView.innerHTML = recentDates
     .map((date) => {
-      const items = byDate[date]
-        .map(
-          (log) =>
-            `<span class="date-icon-chip${log.highIntensity ? ' high' : ''}" title="${escapeAttr(log.activityName)}">${log.icon}</span>`
-        )
+      const items = visibleLogs.filter((log) => (log.activityDate || log.date || todayKey()) === date);
+      const chips = items
+        .map((log) => `<span class="date-icon-chip${log.highIntensity ? ' high' : ''}" title="${escapeAttr(log.activityName)}">${log.icon}</span>`)
         .join('');
       return `
-        <div class="date-group">
+        <button type="button" class="date-button" data-date="${date}">
           <div class="date-group-label">${formatDateLabel(date)}</div>
-          <div class="date-icons-row">${items}</div>
-        </div>`;
+          <div class="date-icons-row">${chips}</div>
+        </button>`;
     })
     .join('');
 }
@@ -319,6 +353,7 @@ function initViewButtons() {
     });
   });
 }
+
 function initTabs() {
   document.querySelectorAll('.tab').forEach((tab) => {
     tab.addEventListener('click', () => {
@@ -349,6 +384,100 @@ function initLogList() {
   });
 }
 
+function initDatePickerView() {
+  els.dateIconsView.addEventListener('click', (e) => {
+    const btn = e.target.closest('.date-button');
+    if (!btn) return;
+    selectedDate = btn.dataset.date;
+    setViewMode(null);
+    renderLogs();
+  });
+}
+
+function renderEvents() {
+  const events = loadEvents().sort((a, b) => {
+    if (eventSortByAdded) {
+      return new Date(b.createdAt || b.eventDate) - new Date(a.createdAt || a.eventDate);
+    }
+    return a.eventDate.localeCompare(b.eventDate);
+  });
+  if (!events.length) {
+    els.eventList.innerHTML = '<p class="empty-state">No events yet. Tap add to create one.</p>';
+    return;
+  }
+  els.eventList.innerHTML = events
+    .map((event) => `
+      <button type="button" class="event-item" data-event-id="${event.id}">
+        <div class="event-item-title">${escapeHtml(event.title)}</div>
+        <div class="event-item-meta">${formatShortDate(event.eventDate)}</div>
+        ${event.description ? `<div class="event-item-desc">${escapeHtml(event.description)}</div>` : ''}
+      </button>`)
+    .join('');
+}
+
+function openEventDialog(event = null) {
+  editingEventId = event?.id ?? null;
+  els.eventDialogTitle.textContent = event ? 'Edit event' : 'Add event';
+  els.eventTitle.value = event?.title ?? '';
+  els.eventDate.value = event?.eventDate ?? todayKey();
+  els.eventDescription.value = event?.description ?? '';
+  els.eventDialog.showModal();
+}
+
+function closeEventDialog() {
+  editingEventId = null;
+  els.eventDialog.close();
+}
+
+function saveEventFromForm() {
+  const title = els.eventTitle.value.trim();
+  const eventDate = els.eventDate.value;
+  const description = els.eventDescription.value.trim();
+  if (!title || !eventDate) return;
+  const events = loadEvents();
+  if (editingEventId) {
+    const idx = events.findIndex((event) => event.id === editingEventId);
+    if (idx >= 0) {
+      events[idx] = { ...events[idx], title, eventDate, description, updatedAt: new Date().toISOString() };
+    }
+  } else {
+    events.unshift({
+      id: crypto.randomUUID(),
+      title,
+      eventDate,
+      description,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+  }
+  saveEvents(events);
+  renderEvents();
+  closeEventDialog();
+  showToast(editingEventId ? 'Event updated' : 'Event added');
+}
+
+function initEvents() {
+  els.eventAddBtn.addEventListener('click', () => openEventDialog());
+  els.eventSortBtn.addEventListener('click', () => {
+    eventSortByAdded = !eventSortByAdded;
+    els.eventSortBtn.classList.toggle('active', eventSortByAdded);
+    els.eventSortBtn.textContent = eventSortByAdded ? 'Sort by added date ✓' : 'Sort by event date';
+    renderEvents();
+  });
+  els.eventList.addEventListener('click', (e) => {
+    const item = e.target.closest('.event-item');
+    if (!item) return;
+    const event = loadEvents().find((entry) => entry.id === item.dataset.eventId);
+    if (event) openEventDialog(event);
+  });
+  els.eventDialogCancel.addEventListener('click', closeEventDialog);
+  els.eventForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    saveEventFromForm();
+  });
+  renderEvents();
+}
+
 window.addEventListener('firestore-logs-updated', async () => {
   await renderLogs();
 });
@@ -375,6 +504,8 @@ els.logForm.addEventListener('submit', async (e) => {
       ...fields,
       timestamp: new Date().toISOString(),
       date: todayKey(),
+      activityDate: selectedDate || todayKey(),
+      updatedAt: new Date().toISOString(),
     });
   }
 
@@ -385,8 +516,10 @@ async function startApp() {
   renderActivityButtons();
   await renderLogs();
   initLogList();
+  initDatePickerView();
   initTabs();
   initViewButtons();
+  initEvents();
 }
 
 startApp();

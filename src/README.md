@@ -16,8 +16,9 @@
   - Activities (logging)
   - Events
   - Goals
-- Main page (Activities)
-  - Layout: 3 sections - 1st is the activity list to select to log (sectionA) ; 2nd, show the logged activities by date, prioritize today (sectionB) ; 3rd, 2 footer buttons to switch view options
+
+## Main page (Activities) (pageA)
+  - Layout: 3 sections - 1st is the activity list to select to log (sectionA) ; 2nd, show the logged activities by date, prioritize today (sectionB) ; 3rd, 2 footer buttons to switch view options (sectionC)
   - Tab activities is the default one. Show list of activities as buttons:
     - Walking, Elliptical
     - Running
@@ -38,6 +39,28 @@
     - If click ok, the activity is logged and is shown on the below section
     - The right side of each activity button has a small button. When clicking that, the activity is added right away without the dialogA showing up
   - In the logged activities section, each logged item is clickable, when clicking show the dialog dialogA again, so the user can update the activity. On the right side of each logged activity, there is a delete button, clicking twice with delete it
+    - This section divides activies by date
+    - Show total of 7 days including today
   - Footer icon buttons at the bottom. When clicking a button, that button is switched on/off, and all other buttons is switched off:
-    - 1st: Expand the activity log view to full screen
-    - 2nd: Show a list of dates with logged activities shown as icons
+    - 1st: Expand the activity log view to full screen (viewB)
+    - 2nd: Show a list of dates with logged activities shown as icons (viewC)
+    - When all buttons are off, the view is back to default (viewA)
+  - In viewC, show list of dates as buttons, sorted for most recent first, show 50 days
+    - When clicking 1 date, the view is switched back to viewA, the user is able to log activities for the selected date
+    - So there are 3 kinds of date: 1. the logging date - the date the activity is created, 2. the activity date - the user input date for the activity that happended, 3. last update date. The logged activity sections like sectionA will be grouped by the logging date.
+
+## Event page (pageB)
+  - Layout: 2 sections: 1. Event list view (sectiondD) ; 2. Footer buttons section like sectionC (sectionE)
+
+### SectionE
+  - Has 2 buttons: 1. Add event ; 2. Sort by added date (a toggle button) (buttonA)
+  - When clicking add, show a dialogB
+  - DialogB:
+    - Is a form with these fields: 1. Title ; 2. Event Date ; 3. Description as a textarea with 4 lines
+    - 2 options: OK, cancel
+
+### SectionD
+  - Show list of added events as buttons
+    - Sort by event date by default
+    - When clicking, show the dialogB to update
+  - When buttonA is clicked to be switched on, sort the events by added date

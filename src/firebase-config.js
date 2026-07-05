@@ -1,4 +1,4 @@
-export const firebaseConfig = {
+window.firebaseConfig = {
   apiKey: "AIzaSyCJp4Ojis8bDMJF7LUCcIOzAZqrfqzlwZ0",
   authDomain: "gamify-life-26aae.firebaseapp.com",
   projectId: "gamify-life-26aae",

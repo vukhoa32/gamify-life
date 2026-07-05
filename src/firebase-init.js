@@ -5,7 +5,7 @@
 try {
   const { firebaseConfig } = await import('./firebase-config.js');
   // load modular SDK via ESM CDN
-  const [{ initializeApp }, { getFirestore, doc, getDoc, setDoc }] = await Promise.all([
+  const [{ initializeApp }, { getFirestore, doc, getDoc, setDoc, onSnapshot }] = await Promise.all([
     import('https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js'),
     import('https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js'),
   ]);
@@ -14,6 +14,12 @@ try {
   const db = getFirestore(app);
 
   const docRef = doc(db, 'gamify-life', 'logs');
+
+  const syncRemoteLogs = (items) => {
+    const safeItems = Array.isArray(items) ? items : [];
+    localStorage.setItem('gamify-life-logs', JSON.stringify(safeItems));
+    window.dispatchEvent(new CustomEvent('firestore-logs-updated', { detail: safeItems }));
+  };
 
   window.loadLogsRemote = async () => {
     try {
@@ -36,6 +42,13 @@ try {
       return false;
     }
   };
+
+  onSnapshot(docRef, (snap) => {
+    const items = snap.exists() ? (Array.isArray(snap.data().items) ? snap.data().items : []) : [];
+    syncRemoteLogs(items);
+  }, (err) => {
+    console.error('Firestore listener error', err);
+  });
 
   window.__firestoreEnabled = true;
   console.info('Firestore sync enabled (gamify-life).');

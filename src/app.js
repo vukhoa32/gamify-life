@@ -340,6 +340,10 @@ function initLogList() {
   });
 }
 
+window.addEventListener('firestore-logs-updated', async () => {
+  await renderLogs();
+});
+
 els.dialogCancel.addEventListener('click', closeDialog);
 
 els.logForm.addEventListener('submit', async (e) => {

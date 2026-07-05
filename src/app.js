@@ -41,10 +41,16 @@ let deleteConfirmTimer = null;
 let toastTimer = null;
 let activeView = null;
 
+function normalizeLogs(value) {
+  if (Array.isArray(value)) return value;
+  if (value && Array.isArray(value.items)) return value.items;
+  return [];
+}
+
 async function loadLogs() {
   if (window.__firestoreEnabled && typeof window.loadLogsRemote === 'function') {
     try {
-      const remote = await window.loadLogsRemote();
+      const remote = normalizeLogs(await window.loadLogsRemote());
       // keep a local cache for performance
       localStorage.setItem(STORAGE_KEY, JSON.stringify(remote));
       return remote;
@@ -53,7 +59,7 @@ async function loadLogs() {
     }
   }
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    return normalizeLogs(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'));
   } catch {
     return [];
   }
@@ -137,8 +143,8 @@ function openDialog(activityId, log = null) {
   els.dialog.showModal();
 }
 
-function openEditDialog(logId) {
-  const log = loadLogs().find((l) => l.id === logId);
+async function openEditDialog(logId) {
+  const log = (await loadLogs()).find((l) => l.id === logId);
   if (log) openDialog(log.activityId, log);
 }
 
@@ -190,7 +196,8 @@ function handleDeleteClick(id) {
 }
 
 function renderLogList(logs) {
-  const sorted = [...logs].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  const normalizedLogs = normalizeLogs(logs);
+  const sorted = [...normalizedLogs].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   const today = todayKey();
   const todayLogs = sorted.filter((l) => l.date === today);
   const older = sorted.filter((l) => l.date !== today);
@@ -247,13 +254,14 @@ function renderLogEntry(log) {
 }
 
 function renderDateIcons(logs) {
-  if (!logs.length) {
+  const normalizedLogs = normalizeLogs(logs);
+  if (!normalizedLogs.length) {
     els.dateIconsView.innerHTML = '<p class="empty-state">No logs yet</p>';
     return;
   }
 
   const byDate = {};
-  logs.forEach((log) => {
+  normalizedLogs.forEach((log) => {
     (byDate[log.date] ||= []).push(log);
   });
 
@@ -275,8 +283,8 @@ function renderDateIcons(logs) {
     .join('');
 }
 
-function renderLogs() {
-  const logs = loadLogs();
+async function renderLogs() {
+  const logs = await loadLogs();
   renderLogList(logs);
   renderDateIcons(logs);
 }
@@ -330,7 +338,9 @@ function initLogList() {
       return;
     }
     const entry = e.target.closest('.log-entry-body');
-    if (entry) openEditDialog(entry.closest('.log-entry').dataset.logId);
+    if (entry) {
+      void openEditDialog(entry.closest('.log-entry').dataset.logId);
+    }
   });
 }
 
@@ -364,7 +374,7 @@ els.logForm.addEventListener('submit', async (e) => {
 
 async function startApp() {
   renderActivityButtons();
-  renderLogs();
+  await renderLogs();
   initLogList();
   initTabs();
   initViewButtons();

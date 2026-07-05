@@ -41,25 +41,20 @@ let deleteConfirmTimer = null;
 let toastTimer = null;
 let activeView = null;
 
-function normalizeLogs(value) {
-  if (Array.isArray(value)) return value;
-  if (value && Array.isArray(value.items)) return value.items;
-  return [];
-}
-
 async function loadLogs() {
   if (window.__firestoreEnabled && typeof window.loadLogsRemote === 'function') {
     try {
-      const remote = normalizeLogs(await window.loadLogsRemote());
-      // keep a local cache for performance
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(remote));
-      return remote;
+      const remote = await window.loadLogsRemote();
+      const safeRemote = Array.isArray(remote) ? remote : [];
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(safeRemote));
+      return safeRemote;
     } catch {
       // fallback to local
     }
   }
   try {
-    return normalizeLogs(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'));
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    return Array.isArray(stored) ? stored : [];
   } catch {
     return [];
   }
@@ -144,7 +139,8 @@ function openDialog(activityId, log = null) {
 }
 
 async function openEditDialog(logId) {
-  const log = (await loadLogs()).find((l) => l.id === logId);
+  const logs = await loadLogs();
+  const log = logs.find((l) => l.id === logId);
   if (log) openDialog(log.activityId, log);
 }
 
@@ -158,7 +154,7 @@ async function addLog(entry) {
   const logs = await loadLogs();
   logs.unshift(entry);
   await saveLogs(logs);
-  renderLogs();
+  await renderLogs();
   showToast(`+10 XP · ${entry.activityName}`);
 }
 
@@ -168,27 +164,27 @@ async function updateLog(id, updates) {
   if (idx === -1) return;
   logs[idx] = { ...logs[idx], ...updates };
   await saveLogs(logs);
-  renderLogs();
+  await renderLogs();
   showToast('Updated');
 }
 
 async function deleteLog(id) {
   const logs = (await loadLogs()).filter((l) => l.id !== id);
   await saveLogs(logs);
-  renderLogs();
+  await renderLogs();
   showToast('Deleted');
 }
 
-function handleDeleteClick(id) {
+async function handleDeleteClick(id) {
   if (deleteConfirmId === id) {
     deleteConfirmId = null;
     clearTimeout(deleteConfirmTimer);
-    deleteLog(id);
+    await deleteLog(id);
     return;
   }
   deleteConfirmId = id;
   clearTimeout(deleteConfirmTimer);
-  renderLogs();
+  await renderLogs();
   deleteConfirmTimer = setTimeout(() => {
     deleteConfirmId = null;
     renderLogs();
@@ -196,8 +192,8 @@ function handleDeleteClick(id) {
 }
 
 function renderLogList(logs) {
-  const normalizedLogs = normalizeLogs(logs);
-  const sorted = [...normalizedLogs].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  const safeLogs = Array.isArray(logs) ? logs : [];
+  const sorted = [...safeLogs].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   const today = todayKey();
   const todayLogs = sorted.filter((l) => l.date === today);
   const older = sorted.filter((l) => l.date !== today);
@@ -254,14 +250,13 @@ function renderLogEntry(log) {
 }
 
 function renderDateIcons(logs) {
-  const normalizedLogs = normalizeLogs(logs);
-  if (!normalizedLogs.length) {
+  if (!logs.length) {
     els.dateIconsView.innerHTML = '<p class="empty-state">No logs yet</p>';
     return;
   }
 
   const byDate = {};
-  normalizedLogs.forEach((log) => {
+  logs.forEach((log) => {
     (byDate[log.date] ||= []).push(log);
   });
 
@@ -339,7 +334,8 @@ function initLogList() {
     }
     const entry = e.target.closest('.log-entry-body');
     if (entry) {
-      void openEditDialog(entry.closest('.log-entry').dataset.logId);
+      const logId = entry.closest('.log-entry').dataset.logId;
+      openEditDialog(logId);
     }
   });
 }

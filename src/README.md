@@ -63,4 +63,5 @@
   - Show list of added events as buttons
     - Sort by event date by default
     - When clicking, show the dialogB to update
+    - Has a remove button at right side, double click to remove
   - When buttonA is clicked to be switched on, sort the events by added date

@@ -414,10 +414,10 @@ function initDatePickerView() {
 }
 
 function setEventDeleteConfirmState(id, isConfirming) {
-  document.querySelectorAll('.event-delete-btn').forEach((btn) => {
+  document.querySelectorAll('.event-remove-btn, .event-delete-btn').forEach((btn) => {
     const shouldConfirm = btn.dataset.eventId === id && isConfirming;
     btn.classList.toggle('confirm', shouldConfirm);
-    btn.textContent = shouldConfirm ? '✓' : '✕';
+    btn.textContent = shouldConfirm ? '✓' : '×';
   });
 }
 
@@ -465,7 +465,7 @@ async function renderEvents() {
           <div class="event-item-meta">${formatShortDate(event.eventDate)}</div>
           ${event.description ? `<div class="event-item-desc">${escapeHtml(event.description)}</div>` : ''}
         </button>
-        <button type="button" class="event-delete-btn" data-event-id="${event.id}" aria-label="Delete event">✕</button>
+        <button type="button" class="event-remove-btn" data-event-id="${event.id}" aria-label="Remove event">×</button>
       </div>`)
     .join('');
 }
@@ -520,10 +520,10 @@ async function initEvents() {
     await renderEvents();
   });
   els.eventList.addEventListener('click', async (e) => {
-    const deleteBtn = e.target.closest('.event-delete-btn');
-    if (deleteBtn) {
+    const removeBtn = e.target.closest('.event-remove-btn');
+    if (removeBtn) {
       e.stopPropagation();
-      await handleEventDeleteClick(deleteBtn.dataset.eventId);
+      await handleEventDeleteClick(removeBtn.dataset.eventId);
       return;
     }
 
@@ -532,6 +532,12 @@ async function initEvents() {
     const events = await loadEvents();
     const event = events.find((entry) => entry.id === mainBtn.dataset.eventId);
     if (event) openEventDialog(event);
+  });
+  els.eventList.addEventListener('dblclick', async (e) => {
+    const removeBtn = e.target.closest('.event-remove-btn');
+    if (!removeBtn) return;
+    e.stopPropagation();
+    await deleteEvent(removeBtn.dataset.eventId);
   });
   els.eventDialogCancel.addEventListener('click', closeEventDialog);
   els.eventForm.addEventListener('submit', (e) => {

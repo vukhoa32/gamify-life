@@ -332,6 +332,7 @@ body {
   cursor: pointer;
 }
 
+.event-remove-btn,
 .event-delete-btn {
   width: 34px;
   height: 34px;
@@ -343,6 +344,7 @@ body {
   cursor: pointer;
 }
 
+.event-remove-btn.confirm,
 .event-delete-btn.confirm {
   background: var(--accent);
   color: white;

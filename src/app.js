@@ -54,6 +54,8 @@ let activeView = null;
 let selectedDate = null;
 let editingEventId = null;
 let eventSortByAdded = false;
+let eventDeleteConfirmId = null;
+let eventDeleteConfirmTimer = null;
 
 async function loadLogs() {
   if (window.__firestoreEnabled && typeof window.loadLogsRemote === 'function') {
@@ -411,6 +413,39 @@ function initDatePickerView() {
   });
 }
 
+function setEventDeleteConfirmState(id, isConfirming) {
+  document.querySelectorAll('.event-delete-btn').forEach((btn) => {
+    const shouldConfirm = btn.dataset.eventId === id && isConfirming;
+    btn.classList.toggle('confirm', shouldConfirm);
+    btn.textContent = shouldConfirm ? '✓' : '✕';
+  });
+}
+
+async function deleteEvent(id) {
+  const events = (await loadEvents()).filter((event) => event.id !== id);
+  await saveEvents(events);
+  await renderEvents();
+  showToast('Event deleted');
+}
+
+async function handleEventDeleteClick(id) {
+  if (eventDeleteConfirmId === id) {
+    eventDeleteConfirmId = null;
+    clearTimeout(eventDeleteConfirmTimer);
+    setEventDeleteConfirmState(null, false);
+    await deleteEvent(id);
+    return;
+  }
+
+  eventDeleteConfirmId = id;
+  clearTimeout(eventDeleteConfirmTimer);
+  setEventDeleteConfirmState(id, true);
+  eventDeleteConfirmTimer = setTimeout(() => {
+    eventDeleteConfirmId = null;
+    setEventDeleteConfirmState(null, false);
+  }, 3000);
+}
+
 async function renderEvents() {
   const events = (await loadEvents()).sort((a, b) => {
     if (eventSortByAdded) {
@@ -424,11 +459,14 @@ async function renderEvents() {
   }
   els.eventList.innerHTML = events
     .map((event) => `
-      <button type="button" class="event-item" data-event-id="${event.id}">
-        <div class="event-item-title">${escapeHtml(event.title)}</div>
-        <div class="event-item-meta">${formatShortDate(event.eventDate)}</div>
-        ${event.description ? `<div class="event-item-desc">${escapeHtml(event.description)}</div>` : ''}
-      </button>`)
+      <div class="event-item" data-event-id="${event.id}">
+        <button type="button" class="event-item-main" data-event-id="${event.id}">
+          <div class="event-item-title">${escapeHtml(event.title)}</div>
+          <div class="event-item-meta">${formatShortDate(event.eventDate)}</div>
+          ${event.description ? `<div class="event-item-desc">${escapeHtml(event.description)}</div>` : ''}
+        </button>
+        <button type="button" class="event-delete-btn" data-event-id="${event.id}" aria-label="Delete event">✕</button>
+      </div>`)
     .join('');
 }
 
@@ -482,10 +520,17 @@ async function initEvents() {
     await renderEvents();
   });
   els.eventList.addEventListener('click', async (e) => {
-    const item = e.target.closest('.event-item');
-    if (!item) return;
+    const deleteBtn = e.target.closest('.event-delete-btn');
+    if (deleteBtn) {
+      e.stopPropagation();
+      await handleEventDeleteClick(deleteBtn.dataset.eventId);
+      return;
+    }
+
+    const mainBtn = e.target.closest('.event-item-main');
+    if (!mainBtn) return;
     const events = await loadEvents();
-    const event = events.find((entry) => entry.id === item.dataset.eventId);
+    const event = events.find((entry) => entry.id === mainBtn.dataset.eventId);
     if (event) openEventDialog(event);
   });
   els.eventDialogCancel.addEventListener('click', closeEventDialog);
